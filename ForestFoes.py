@@ -146,7 +146,6 @@ class ForestFoes(object):
         return str("p1") if self.is_p1 else str("p2")
     
     def update_arrows(self, arrows):
-        print("update_arrows")
         self.arrow_list.empty()
         for loc in arrows:
             # Set the arrow's position
@@ -161,7 +160,6 @@ class ForestFoes(object):
                 exit()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_s:
-                    print("S pressed")
                     self.player_shoot()
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:

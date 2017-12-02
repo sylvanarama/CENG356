@@ -53,7 +53,6 @@ class Client(ConnectionListener, ForestFoes):
         self.send_action('move')
 
     def player_shoot(self):
-        print("player_shoot")
         if self.ready:
             self.send_action('shoot')
 
@@ -118,7 +117,6 @@ class Client(ConnectionListener, ForestFoes):
 
     # Arrow data retrieved from server
     def Network_arrows(self, data):
-        print("Network_arrows")
         self.update_arrows(data['arrows'])
         #self.p1.health = data['p1_health']
         #self.p2.health = data['p2_health']

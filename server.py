@@ -53,7 +53,6 @@ class ServerChannel(Channel):
         self.pass_on(data)
 
     def Network_shoot(self, data):
-        print("Network_shoot")
         # Set the arrow so it is where the player is
         arrow = Arrow(*(self.player_pos))
         # Add the arrow to the list
