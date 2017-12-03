@@ -1,4 +1,5 @@
 import sys
+import pygame
 from time import sleep
 from PodSixNet.Connection import connection, ConnectionListener
 from ForestFoes import ForestFoes, Player, Arrow
@@ -49,12 +50,18 @@ class Client(ConnectionListener, ForestFoes):
             player.moveRight()
         if direction == "left":
             player.moveLeft()
-
+        player.standing()
         self.send_action('move')
 
     def player_shoot(self):
-        if self.ready:
-            self.send_action('shoot')
+        if self.is_p1 is None:
+            return
+        if self.is_p1:
+            player = self.p1
+        else:
+            player = self.p2
+        player.shooting()
+        self.send_action('shoot')
 
     ###############################
     ### Network event callbacks ###

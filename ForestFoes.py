@@ -29,16 +29,22 @@ txtpos = (100, 90)
 # This class represents a player. It derives from the "Sprite" class in Pygame.
 class Player(pygame.sprite.Sprite):
 
-    def __init__(self, x_pos=125, y_pos = 270):
+    def __init__(self, player):
         # Call the parent class (Sprite) constructor
         super().__init__()
-
-        # Load the player picture
-        self.image = pygame.image.load("resources/images/player.png").convert_alpha()
-        # Fetch the rectangle object that has the dimensions of the image.
-        size = (width, height) = self.image.get_size()
-        self.rect = pygame.Rect(x_pos, y_pos, size[0], size[1])
-        self.direction = "left"
+        if player == 1:
+            self.image = pygame.image.load("resources/images/p1_stand.png").convert_alpha()
+            self.image = pygame.transform.flip(self.image, 1, 0)
+            size = (width, height) = self.image.get_size()
+            self.rect = pygame.Rect(125, 270, size[0], size[1])
+            self.direction = "right"
+            self.player = 1
+        else:
+            self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
+            size = (width, height) = self.image.get_size()
+            self.rect = pygame.Rect(SCREENWIDTH - (125 + size[0]), 270, size[0], size[1])
+            self.direction = "left"
+            self.player = 2
         self.display = False
         self.arrows = pygame.sprite.Group()
 
@@ -72,26 +78,49 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.transform.flip(self.image, 1, 0)
             self.direction = "left"
 
-    def set_p1(self, p1):
-        if p1:
-            self.update([125, "right"])
+    def set_p1ayer(self, p1ayer):
+        if p1ayer == 1:
+            self.image = pygame.image.load("resources/images/p1_stand.png").convert_alpha()
+            self.image = pygame.transform.flip(self.image, 1, 0)
+            size = (width, height) = self.image.get_size()
+            self.rect = pygame.Rect(125, 270, size[0], size[1])
+            self.direction = "right"
+            self.player = 1
         else:
-            self.set_p2(True)
-
-    def set_p2(self, p2):
-        if p2:
-            self.update([SCREENWIDTH-125, "left"])
-        else:
-            self.set_p1(True)
+            self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
+            size = (width, height) = self.image.get_size()
+            self.rect = pygame.Rect(SCREENWIDTH-(125+size[0]), 270, size[0], size[1])
+            self.direction = "left"
+            self.player = 2
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
 
-class Tree(Player):
+    def shooting(self):
+        if self.player == 1:
+            self.image = pygame.image.load("resources/images/p1_shoot.png").convert_alpha()
+        else:
+            self.image = pygame.image.load("resources/images/p2_shoot.png").convert_alpha()
+        if self.direction != "left":
+            self.image = pygame.transform.flip(self.image, 1, 0)
+
+    def standing(self):
+        if self.player == 1:
+            self.image = pygame.image.load("resources/images/p1_stand.png").convert_alpha()
+        else:
+            self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
+        if self.direction != "left":
+            self.image = pygame.transform.flip(self.image, 1, 0)
+
+
+class Tree(pygame.sprite.Sprite):
     def __init__(self, x_pos, y_pos=0):
-        super().__init__()
+        super(Tree, self).__init__()
         self.image = pygame.image.load("resources/images/tree01.png").convert_alpha()
         self.rect = pygame.Rect(x_pos, y_pos, size[0], size[1])
+
+    def draw(self, surface):
+        surface.blit(self.image, self.rect)
 
 
 class Arrow(pygame.sprite.Sprite):
@@ -101,8 +130,8 @@ class Arrow(pygame.sprite.Sprite):
         super(Arrow, self).__init__()
         self.image = pygame.image.load("resources/images/arrow.png").convert_alpha()
         self.rect = self.image.get_rect()
-        self.rect.x = x_pos
-        self.rect.y = 330
+        self.rect.x = x_pos+20
+        self.rect.y = 310
         self.direction = direction
         if direction == "right":
             self.image = pygame.transform.flip(self.image, 1, 0)
@@ -110,9 +139,9 @@ class Arrow(pygame.sprite.Sprite):
 
     def update(self):
         if self.direction == "left":
-            self.rect.x -= 1
+            self.rect.x -= self.arrow_speed
         if self.direction == "right":
-            self.rect.x += 1
+            self.rect.x += self.arrow_speed
 
     def set_loc(self, x, dir):
         self.rect.x = x
@@ -130,10 +159,8 @@ class ForestFoes(object):
         self.winLoseLabel = ''
         self.restartLabel = 'Press Home button or j key to restart'
         self.frame = 0
-        self.p1 = Player()
-        self.p2 = Player()
-        self.p1.set_p1(True)
-        self.p2.set_p2(True)
+        self.p1 = Player(1)
+        self.p2 = Player(2)
         self.is_p1 = None
         self.game_over = False
         self.has_won = False

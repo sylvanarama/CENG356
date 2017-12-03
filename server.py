@@ -20,7 +20,7 @@ class ServerChannel(Channel):
         self._player_pos = None
         self.p1 = None
         self.p2 = None
-        self.sprite = Player()  # Each player needs a sprite representation
+        self.sprite = Player(1)  # Each player needs a sprite representation
         self.arrows = pygame.sprite.Group() # Each player has a list of arrows
 
     @property
