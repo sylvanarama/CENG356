@@ -1,30 +1,36 @@
 import pygame
 from os import environ
+import random
 from sys import exit
 
 # Define some variables
-SCREENWIDTH=800
-SCREENHEIGHT=480
-WHITE=(255,255,255)
+X_DIM = 720
+Y_DIM = 480
+SCREENSIZE = (X_DIM, Y_DIM)
+WHITE=(255, 255, 255)
+GREEN = (0, 255,   0)
+RED = (255,   0,   0)
+NUM_TREES = 3
 
 # Open a new window
 environ['SDL_VIDEO_CENTERED'] = '1'
 pygame.init()
-size = (SCREENWIDTH, SCREENHEIGHT)
+size = (X_DIM, Y_DIM)
 screen = pygame.display.set_mode(size)
 pygame.display.set_caption("Forest Foes")
 
-# Load Images
+# Load images
 background = pygame.image.load("resources/images/pixel_forest.png")
-backgroundRect = background.get_rect()
+game_over_bg = pygame.image.load("resources/images/game_over.png")
+BG_WIDTH = background.get_width()
+MAX_PAGE = (BG_WIDTH//X_DIM)-1
 
 # Configure the text
 pygame.font.init()
 fnt = pygame.font.SysFont("Arial", 14)
-fnt_big = pygame.font.SysFont("Arial", 50)
-fnt_med = pygame.font.SysFont("Arial", 30)
+fnt_big = pygame.font.SysFont("Courier", 50)
+fnt_med = pygame.font.SysFont("Courier", 30)
 txtpos = (100, 90)
-
 
 # This class represents a player. It derives from the "Sprite" class in Pygame.
 class Player(pygame.sprite.Sprite):
@@ -38,14 +44,18 @@ class Player(pygame.sprite.Sprite):
             size = (width, height) = self.image.get_size()
             self.rect = pygame.Rect(125, 270, size[0], size[1])
             self.direction = "right"
+            self.bg_page = 0
             self.player = 1
         else:
             self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
             size = (width, height) = self.image.get_size()
-            self.rect = pygame.Rect(SCREENWIDTH - (125 + size[0]), 270, size[0], size[1])
+            self.rect = pygame.Rect(X_DIM - (125 + size[0]), 270, size[0], size[1])
             self.direction = "left"
+            self.bg_page = MAX_PAGE
             self.player = 2
+        self.health = 100
         self.display = False
+        self.is_shooting = False
         self.arrows = pygame.sprite.Group()
 
     # Methods
@@ -59,24 +69,31 @@ class Player(pygame.sprite.Sprite):
         self.direction = direction
 
     # Update player's position
-    def update(self, pos):
+    def update(self, pos, page=None):
         [x, direction] = pos
+        if page is None: page = self.bg_page
+        if (x < 0) or (x >= X_DIM):
+            if direction == "left":
+                if page == 0: x = 0
+                else:
+                    page -=1
+                    x = (x % X_DIM)
+            elif direction == "right":
+                if page == MAX_PAGE: x = X_DIM
+                else:
+                    page += 1
+                    x = (x % X_DIM)
+
         self.rect.x = x
+        self.bg_page = page
         if direction != self.direction:
             self.image = pygame.transform.flip(self.image, 1, 0)
             self.direction = direction
 
-    def moveRight(self):
-        self.rect.x += 5
-        if self.direction == "left":
-            self.image = pygame.transform.flip(self.image, 1, 0)
-            self.direction = "right"
-
-    def moveLeft(self):
-        self.rect.x -= 5
-        if self.direction == "right":
-            self.image = pygame.transform.flip(self.image, 1, 0)
-            self.direction = "left"
+    def move(self,direction):
+        if direction == "right": self.rect.x += 5
+        else: self.rect.x -= 5
+        self.update([self.rect.x, direction], self.bg_page)
 
     def set_p1ayer(self, p1ayer):
         if p1ayer == 1:
@@ -89,7 +106,7 @@ class Player(pygame.sprite.Sprite):
         else:
             self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
             size = (width, height) = self.image.get_size()
-            self.rect = pygame.Rect(SCREENWIDTH-(125+size[0]), 270, size[0], size[1])
+            self.rect = pygame.Rect(X_DIM-(125+size[0]), 270, size[0], size[1])
             self.direction = "left"
             self.player = 2
 
@@ -103,6 +120,7 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.image.load("resources/images/p2_shoot.png").convert_alpha()
         if self.direction != "left":
             self.image = pygame.transform.flip(self.image, 1, 0)
+        self.is_shooting = True
 
     def standing(self):
         if self.player == 1:
@@ -111,21 +129,26 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
         if self.direction != "left":
             self.image = pygame.transform.flip(self.image, 1, 0)
+        self.is_shooting = False
 
 
 class Tree(pygame.sprite.Sprite):
-    def __init__(self, x_pos, y_pos=0):
+    def __init__(self, pos):
         super(Tree, self).__init__()
         self.image = pygame.image.load("resources/images/tree01.png").convert_alpha()
+        [page, x_pos, y_pos] = pos
+        if x_pos == 0 and page == 0:
+            x_pos = random.randrange(0, X_DIM, self.image.get_width())
+            page = random.randrange(0, MAX_PAGE, 1)
         self.rect = pygame.Rect(x_pos, y_pos, size[0], size[1])
+        self.bg_page = page
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
 
 
 class Arrow(pygame.sprite.Sprite):
-    """ This class represents the arrow . """
-    def __init__(self, x_pos, direction):
+    def __init__(self, x_pos, direction, page):
         # Call the parent class (Sprite) constructor
         super(Arrow, self).__init__()
         self.image = pygame.image.load("resources/images/arrow.png").convert_alpha()
@@ -133,6 +156,7 @@ class Arrow(pygame.sprite.Sprite):
         self.rect.x = x_pos+20
         self.rect.y = 310
         self.direction = direction
+        self.bg_page = page
         if direction == "right":
             self.image = pygame.transform.flip(self.image, 1, 0)
         self.arrow_speed = 1
@@ -166,19 +190,58 @@ class ForestFoes(object):
         self.has_won = False
         self.player_list = pygame.sprite.Group()
         self.arrow_list = pygame.sprite.Group()
-        self.trees = [Tree(200), Tree(600)]
+        self.tree_list = pygame.sprite.Group()
+        self.sprite_list = pygame.sprite.Group()
+        self.sprite_list.add(self.player_list, self.tree_list, self.arrow_list)
+
+     # Generate random trees
+    def gen_trees(self):
+        for i in range(NUM_TREES):
+            self.tree_list.empty()
+            self.tree_list.add(Tree())
 
     # Returns string telling which player the client is
     def which_player(self):
         return str("p1") if self.is_p1 else str("p2")
+
+    # Returns the player object which the client is
+    def current_player(self):
+        return self.p1 if self.is_p1 else self.p2
     
     def update_arrows(self, arrows):
         self.arrow_list.empty()
         for loc in arrows:
             # Set the arrow's position
-            arrow = Arrow(loc[0],loc[1])
+            arrow = Arrow(loc[0],loc[1],loc[2])
             # Add the arrow to the list
             self.arrow_list.add(arrow)
+
+    # Display win/lose condition
+    def game_end(self, player):
+        self.game_over = True
+        if (self.is_p1 and player == 'p2') or (not self.is_p1 and player == 'p1'):
+            self.has_won = True
+            self.winLoseLabel = 'YOU WON!'
+        else:
+            self.winLoseLabel = 'YOU LOST'
+
+    # def update_background(self):
+    #     player = self.current_player()
+    #     p_x = player.rect.x
+    #     if (p_x < 0) or (p_x >= X_DIM):
+    #         dir = player.direction
+    #         if dir == "left":
+    #             if player.bg_page == 0: player.rect.x = 0
+    #             else:
+    #                 player.bg_page -=1
+    #                 player.rect.x = (player.rect.x % X_DIM)
+    #         elif dir == "right":
+    #             if player.bg_page == MAX_PAGE: player.rect.x = X_DIM
+    #             else:
+    #                 self.bg_page += 1
+    #                 player.rect.x = (player.rect.x % X_DIM)
+    #
+    #     screen.blit(background, [0,0],[player.bg_page*X_DIM, 0, X_DIM, Y_DIM])
 
     # Handles PyGame events
     def events(self):
@@ -197,19 +260,49 @@ class ForestFoes(object):
     # Draws all game art assets
     def draw(self):
         # Draw background image
-        screen.blit(background, [0, 0])
+        screen.blit(background, [0,0])
+
+        # P1 Perspective
+        if self.is_p1:
+            player = self.p1
+            # Background
+            screen.blit(background, [0, 0], [player.bg_page*X_DIM, 0, X_DIM, Y_DIM])
+            # Sprites
+            for sprite in self.sprite_list:
+                if sprite.bg_page == player.bg_page:
+                    sprite.draw(screen)
+            # Health bar
+            hp_width = self.p1.health*2
+            screen.fill(RED, (10, 25, 200, 15))
+            screen.fill(GREEN, (10, 25, hp_width, 15))
+            screen.blit(fnt.render("P1 health", 1, WHITE), [10, 5])
+
+        # P2 Perspective
+        else:
+            player = self.p2
+            # Background
+            screen.blit(background, [0, 0], [player.bg_page * X_DIM, 0, X_DIM, Y_DIM])
+            # Sprites
+            for sprite in self.sprite_list:
+                if sprite.bg_page == player.bg_page:
+                    sprite.draw(screen)
+            # Health bar
+            hp_width = self.p2.health*2
+            screen.fill(RED, (X_DIM-10-200, 25, 200, 15))
+            screen.fill(GREEN, (X_DIM-10-200, 25, hp_width, 15))
+            screen.blit(fnt.render("P2 health", 1, WHITE), [X_DIM-10-200, 5])
 
         # Draw connection and player status
-        screen.blit(fnt.render(self.statusLabel, 1, WHITE), [10, 25])
-        screen.blit(fnt.render(self.playersLabel, 1, WHITE), [10, 40])
+        screen.blit(fnt.render(self.statusLabel, 1, WHITE), [10, Y_DIM-40])
+        screen.blit(fnt.render(self.playersLabel, 1, WHITE), [10, Y_DIM-25])
 
-        # Draw Sprites
-        if self.p1.display:
-            self.p1.draw(screen)
-        if self.p2.display:
-            self.p2.draw(screen)
-        self.arrow_list.draw(screen)
-        for tree in self.trees:
-            tree.draw(screen)
+        # If game over, notify player
+        if self.game_over:
+            screen.blit(game_over_bg, [0, 0])
+
+            # Win/lose font
+            text = fnt_big.render(self.winLoseLabel, 1, WHITE)
+            textpos = text.get_rect(center=(X_DIM//2, Y_DIM//2))
+            screen.blit(text, textpos)
 
         pygame.display.flip()

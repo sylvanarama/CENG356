@@ -2,13 +2,17 @@ import sys
 import os
 import pygame
 from collections import deque
+import random
 from time import sleep
-from ForestFoes import Player, Arrow
+from ForestFoes import Player, Arrow, Tree
 from PodSixNet.Server import Server
 from PodSixNet.Channel import Channel
 
-X_DIM = 800
+X_DIM = 720
 Y_DIM = 480
+NUM_TREES = 3
+TREE_WIDTH = 370
+MAX_PAGE = 2
 SCREENSIZE = (X_DIM, Y_DIM)
 
 # Server representation of a single connected client
@@ -18,6 +22,7 @@ class ServerChannel(Channel):
         Channel.__init__(self, *args, **kwargs)
         self.id = str(self._server.next_id())
         self._player_pos = None
+        self.bg_page = 0
         self.p1 = None
         self.p2 = None
         self.sprite = Player(1)  # Each player needs a sprite representation
@@ -43,20 +48,27 @@ class ServerChannel(Channel):
     def Close(self):
         self._server.delete_player(self)
 
+
     ##################################
     ### Network specific callbacks ###
     ##################################
 
-    # Processes move data from client
+    # Processes the "move" action from client
     def Network_move(self, data):
         self.player_pos = data['p_pos']
+        self.bg_page = data['p_pg']
         self.pass_on(data)
 
+   # Processes the "shoot" action from client
     def Network_shoot(self, data):
+        player = self.sprite
         # Set the arrow so it is where the player is
-        arrow = Arrow(*(self.player_pos))
+        arrow = Arrow(*(player.pos), player.bg_page)
         # Add the arrow to the list
         self.arrows.add(arrow)
+        # Change the sprite to the "shooting" position
+        player.shooting()
+
         self.pass_on(data)
 
     # Processes restart from client
@@ -73,6 +85,13 @@ class ForestServer(Server):
         self.p2 = None
         self.ready = False
         self.waiting_player_list = deque()  # Make a FIFO queue for waiting clients (no limit to waiting clients)
+        self.tree_pos_list = []
+        # Generate random trees
+        for i in range(NUM_TREES):
+            x_pos = random.randrange(0, X_DIM, TREE_WIDTH)
+            page = random.randrange(0, MAX_PAGE, 1)
+            self.tree_pos_list.append([page, x_pos, 0])
+
         print('Server launched')
 
     ###########################
@@ -115,14 +134,16 @@ class ForestServer(Server):
             sys.exit(1)
         # If only P1, tell client they're P1
         if self.p2 is None:
-            player.Send({"action": "init", "p": 'p1'})
+            player.Send({"action": "init", "p": 'p1', "trees": self.tree_pos_list})
         # Else if P2, notify P2 and send position data
         else:
-            self.p2.Send({"action": "init", "p": 'p2'})
+            self.p2.Send({"action": "init", "p": 'p2', "trees": self.tree_pos_list})
+
             self.send_to_all({"action": "ready"})
             # Only send position data from P1 -> P2
             loc = list(self.p1.player_pos)
-            self.send_to_all({"action": "move", "p": 'p1', "p_pos": loc})
+            pg = self.p1.bg_page
+            self.send_to_all({"action": "move", "p": 'p1', "p_pos": loc, "p_pg": pg})
             self.ready = True
 
     # Deletes a player from the server
@@ -144,6 +165,14 @@ class ForestServer(Server):
         if self.waiting_player_list:
             self.add_player(self.waiting_player_list.popleft())
 
+    # Process a player death, end game
+    def game_over(self, player):
+        dead = player.which_player()
+        print(dead, " has died")
+        # Send message to clients that a player was defeated
+        self.send_to_all({"action": "end", "p": dead})
+        self.ready = False
+
     # Send list of arrow locations to players
     def gen_arrow_locs(self):
         arrow_locs = list()
@@ -154,7 +183,7 @@ class ForestServer(Server):
                     arrow.kill()
                     break
                 # If we're here, arrow is still moving and should be sent to clients
-                arrow_locs.append((arrow.rect.x, arrow.direction))
+                arrow_locs.append((arrow.rect.x, arrow.direction, arrow.bg_page))
         return arrow_locs
     
     def handle_arrows(self):
@@ -166,21 +195,36 @@ class ForestServer(Server):
         self.p2.arrows.update()
 
         # Do collision detection
-        #self.handle_arrow_hits(self.p1)
-        #self.handle_arrow_hits(self.p2)
+        self.handle_arrow_hits(self.p1)
+        self.handle_arrow_hits(self.p2)
 
         # Generate position list
         arrow_list = self.gen_arrow_locs()
 
         # Send new arrow lists
         if arrow_list or player_had_arrows:
-            self.send_to_all({"action": "arrows","arrows": arrow_list})
+            self.send_to_all({"action": "arrows",
+                              "arrows": arrow_list,
+                              "p1_health": self.p1.sprite.health,
+                              "p2_health": self.p2.sprite.health})
 
-        #"p1_health": self.p1.sprite.health,
-        #"p2_health": self.p2.sprite.health
-        # If any of the players have died, let both players know
-        #if self.p1.sprite.health <= 0 or self.p2.sprite.health <= 0:
-        #    self.handle_death()
+    # Collision detection on arrows
+    def handle_arrow_hits(self, player):
+        if player.p1:
+            other_player = self.p2
+        else:
+            other_player = self.p1
+
+        # Perform collision detection
+        arrows_hit = pygame.sprite.spritecollide(player.sprite, other_player.arrows, False)
+        # Check the players were in the same room
+        if player.bg_page == other_player.bg_page:
+            # For each collision, subtract health
+            for arrow in arrows_hit:
+                arrow.kill()
+                player.sprite.health -= 10
+                if(player.sprite.health <=0):
+                    self.game_over(player)
 
     # Send data to all connected clients
     def send_to_all(self, data):

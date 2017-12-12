@@ -2,7 +2,7 @@ import sys
 import pygame
 from time import sleep
 from PodSixNet.Connection import connection, ConnectionListener
-from ForestFoes import ForestFoes, Player, Arrow
+from ForestFoes import ForestFoes, Player, Arrow, Tree
 
 # Main Client Class
 class Client(ConnectionListener, ForestFoes):
@@ -25,14 +25,11 @@ class Client(ConnectionListener, ForestFoes):
     def send_action(self, action):
         if self.is_p1 is None:
             return
-        if self.is_p1:
-            player = self.p1
-        else:
-            player = self.p2
+        player = self.current_player()
         pos = player.pos
-
+        pg = player.bg_page
         # Send to server
-        connection.Send({"action": action, "p": self.which_player(), "p_pos": pos})
+        connection.Send({"action": action, "p": self.which_player(), "p_pos": pos, "p_pg": pg})
 
     #######################
     ### Event callbacks ###
@@ -41,25 +38,15 @@ class Client(ConnectionListener, ForestFoes):
     def player_move(self, direction):
         if self.is_p1 is None:
             return
-        if self.is_p1:
-            player = self.p1
-        else:
-            player = self.p2
-
-        if direction == "right":
-            player.moveRight()
-        if direction == "left":
-            player.moveLeft()
+        player = self.current_player()
+        player.move(direction)
         player.standing()
         self.send_action('move')
 
     def player_shoot(self):
         if self.is_p1 is None:
             return
-        if self.is_p1:
-            player = self.p1
-        else:
-            player = self.p2
+        player = self.current_player()
         player.shooting()
         self.send_action('shoot')
 
@@ -69,15 +56,17 @@ class Client(ConnectionListener, ForestFoes):
 
     # Perform client setup
     def Network_init(self, data):
+        for tree_pos in data['trees']:
+            self.tree_list.add(Tree(tree_pos))
         if data["p"] == 'p1':
             self.is_p1 = True
-            self.p1.display = True
+            self.sprite_list.add(self.p1, self.tree_list)
             print("No other players currently connected. You are P1.")
             # Send position to server
             self.send_action('move')
         elif data["p"] == 'p2':
             self.is_p1 = False
-            self.p2.display = True
+            self.sprite_list.add(self.p2, self.tree_list)
             print('You are P2. The game will start momentarily.')
             # Send position to server
             self.send_action('move')
@@ -93,8 +82,7 @@ class Client(ConnectionListener, ForestFoes):
     # Network is ready, start game
     def Network_ready(self, data):
         self.playersLabel = "You are " + self.which_player().capitalize() + ". Battle!"
-        self.p1.display = True
-        self.p2.display = True
+        self.sprite_list.add(self.p1, self.p2)
         self.ready = True
 
     # Player left network, delete player from client
@@ -109,11 +97,12 @@ class Client(ConnectionListener, ForestFoes):
     # Update positions of players
     def Network_move(self, data):
         position = data['p_pos']
+        page = data['p_pg']
         player = data['p']
         if player == 'p1' and not self.is_p1:
-            self.p1.update(position)
+            self.p1.update(position, page)
         elif player == 'p2' and self.is_p1:
-            self.p2.update(position)
+            self.p2.update(position, page)
         elif player in ('p1', 'p2'):  # This is client's position coming back from player
             pass  # TODO: Anti-cheat detection here
         else:
@@ -125,8 +114,13 @@ class Client(ConnectionListener, ForestFoes):
     # Arrow data retrieved from server
     def Network_arrows(self, data):
         self.update_arrows(data['arrows'])
-        #self.p1.health = data['p1_health']
-        #self.p2.health = data['p2_health']
+        self.p1.health = data['p1_health']
+        self.p2.health = data['p2_health']
+
+    # A player has been defeated, end the game
+    def Network_end(self, data):
+        self.game_end(data['p'])
+        self.ready = False
 
     ########################################
     ### Built-in network event callbacks ###
