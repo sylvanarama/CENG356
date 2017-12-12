@@ -66,9 +66,6 @@ class ServerChannel(Channel):
         arrow = Arrow(*(player.pos), player.bg_page)
         # Add the arrow to the list
         self.arrows.add(arrow)
-        # Change the sprite to the "shooting" position
-        player.shooting()
-
         self.pass_on(data)
 
     # Processes restart from client
@@ -89,7 +86,7 @@ class ForestServer(Server):
         # Generate random trees
         for i in range(NUM_TREES):
             x_pos = random.randrange(0, X_DIM, TREE_WIDTH)
-            page = random.randrange(0, MAX_PAGE, 1)
+            page = random.randrange(0, MAX_PAGE-1, 1)
             self.tree_pos_list.append([page, x_pos, 0])
 
         print('Server launched')

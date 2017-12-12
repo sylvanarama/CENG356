@@ -225,24 +225,6 @@ class ForestFoes(object):
         else:
             self.winLoseLabel = 'YOU LOST'
 
-    # def update_background(self):
-    #     player = self.current_player()
-    #     p_x = player.rect.x
-    #     if (p_x < 0) or (p_x >= X_DIM):
-    #         dir = player.direction
-    #         if dir == "left":
-    #             if player.bg_page == 0: player.rect.x = 0
-    #             else:
-    #                 player.bg_page -=1
-    #                 player.rect.x = (player.rect.x % X_DIM)
-    #         elif dir == "right":
-    #             if player.bg_page == MAX_PAGE: player.rect.x = X_DIM
-    #             else:
-    #                 self.bg_page += 1
-    #                 player.rect.x = (player.rect.x % X_DIM)
-    #
-    #     screen.blit(background, [0,0],[player.bg_page*X_DIM, 0, X_DIM, Y_DIM])
-
     # Handles PyGame events
     def events(self):
         for event in pygame.event.get():  # User did something
@@ -259,8 +241,6 @@ class ForestFoes(object):
 
     # Draws all game art assets
     def draw(self):
-        # Draw background image
-        screen.blit(background, [0,0])
 
         # P1 Perspective
         if self.is_p1:

@@ -101,8 +101,10 @@ class Client(ConnectionListener, ForestFoes):
         player = data['p']
         if player == 'p1' and not self.is_p1:
             self.p1.update(position, page)
+            self.p1.standing()
         elif player == 'p2' and self.is_p1:
             self.p2.update(position, page)
+            self.p2.standing()
         elif player in ('p1', 'p2'):  # This is client's position coming back from player
             pass  # TODO: Anti-cheat detection here
         else:
@@ -110,6 +112,14 @@ class Client(ConnectionListener, ForestFoes):
             sys.stderr.write(str(data) + "\n")
             sys.stderr.flush()
             sys.exit(1)
+
+    # Other client started shooting, change the sprite
+    def Network_shoot(self, data):
+        player = data['p']
+        if player == 'p1' and not self.is_p1:
+            self.p1.shooting()
+        elif player == 'p2' and self.is_p1:
+            self.p2.shooting()
 
     # Arrow data retrieved from server
     def Network_arrows(self, data):
