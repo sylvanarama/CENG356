@@ -82,12 +82,14 @@ class ForestServer(Server):
         self.p2 = None
         self.ready = False
         self.waiting_player_list = deque()  # Make a FIFO queue for waiting clients (no limit to waiting clients)
+        self.tree_list = pygame.sprite.Group()
         self.tree_pos_list = []
         # Generate random trees
         for i in range(NUM_TREES):
             x_pos = random.randrange(0, X_DIM, TREE_WIDTH)
             page = random.randrange(0, MAX_PAGE-1, 1)
             self.tree_pos_list.append([page, x_pos, 0])
+            self.tree_list.add(Tree([page, x_pos, 0]))
 
         print('Server launched')
 
@@ -213,8 +215,8 @@ class ForestServer(Server):
             other_player = self.p1
 
         # Perform collision detection
-        # Check the players were in the same room
-        if player.bg_page == other_player.bg_page:
+        # Check the players were in the same room and visible
+        if player.bg_page == other_player.bg_page and not player.sprite.hidden:
             # For each collision, subtract health
             for arrow in other_player.arrows:
                 if pygame.sprite.collide_mask(arrow, player.sprite):
@@ -222,6 +224,20 @@ class ForestServer(Server):
                     player.sprite.health -= 10
                 if(player.sprite.health <=0):
                     self.game_over(player)
+
+    def handle_hiding(self):
+        for player in {self.p1, self.p2}:
+            for tree in self.tree_list:
+                if player.bg_page == tree.bg_page:
+                    # center of the player sprite
+                    p_x = player.sprite.rect.x+64
+                    # bounds of the trunk of the tree
+                    t_min = tree.rect.x+140
+                    t_max = tree.rect.x+190
+                    if t_min <= p_x <= t_max:
+                        player.sprite.hidden = True
+                    else: player.sprite.hidden = False
+        self.send_to_all({"action": "hide", "p1": self.p1.sprite.hidden, "p2": self.p2.sprite.hidden})
 
     # Send data to all connected clients
     def send_to_all(self, data):
@@ -236,6 +252,7 @@ class ForestServer(Server):
             self.Pump()
             if self.ready:
                 self.handle_arrows()
+                self.handle_hiding()
             sleep(0.0001)  # 0.01, 0.0001?
 
 # get command line argument of server, port

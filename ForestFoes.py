@@ -56,6 +56,7 @@ class Player(pygame.sprite.Sprite):
         self.health = 100
         self.mask = pygame.mask.from_surface(self.image)
         self.arrows = pygame.sprite.Group()
+        self.hidden = False
 
     # Methods
     @property
@@ -249,7 +250,7 @@ class ForestFoes(object):
 
             # Sprites
             for sprite in self.player_list:
-                if sprite.bg_page == player.bg_page:
+                if sprite.bg_page == player.bg_page and not sprite.hidden:
                     sprite.draw(screen)
             for sprite in self.arrow_list:
                 if sprite.bg_page == player.bg_page:
@@ -272,7 +273,7 @@ class ForestFoes(object):
 
             # Sprites
             for sprite in self.player_list:
-                if sprite.bg_page == player.bg_page:
+                if sprite.bg_page == player.bg_page and not sprite.hidden:
                     sprite.draw(screen)
             for sprite in self.arrow_list:
                 if sprite.bg_page == player.bg_page:

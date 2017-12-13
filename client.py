@@ -127,6 +127,10 @@ class Client(ConnectionListener, ForestFoes):
         self.p1.health = data['p1_health']
         self.p2.health = data['p2_health']
 
+    def Network_hide(self, data):
+        self.p1.hidden = data['p1']
+        self.p2.hidden = data['p2']
+
     # A player has been defeated, end the game
     def Network_end(self, data):
         self.game_end(data['p'])
