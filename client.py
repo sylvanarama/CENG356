@@ -60,13 +60,13 @@ class Client(ConnectionListener, ForestFoes):
             self.tree_list.add(Tree(tree_pos))
         if data["p"] == 'p1':
             self.is_p1 = True
-            self.sprite_list.add(self.p1, self.tree_list)
+            self.player_list.add(self.p1)
             print("No other players currently connected. You are P1.")
             # Send position to server
             self.send_action('move')
         elif data["p"] == 'p2':
             self.is_p1 = False
-            self.sprite_list.add(self.p2, self.tree_list)
+            self.player_list.add(self.p2)
             print('You are P2. The game will start momentarily.')
             # Send position to server
             self.send_action('move')
@@ -82,7 +82,7 @@ class Client(ConnectionListener, ForestFoes):
     # Network is ready, start game
     def Network_ready(self, data):
         self.playersLabel = "You are " + self.which_player().capitalize() + ". Battle!"
-        self.sprite_list.add(self.p1, self.p2)
+        self.player_list.add(self.p1, self.p2)
         self.ready = True
 
     # Player left network, delete player from client
@@ -90,9 +90,9 @@ class Client(ConnectionListener, ForestFoes):
         self.playersLabel = "Other player left server"
         self.ready = False
         if self.is_p1:
-            self.p2.display = False
+            self.player_list.remove(self.p2)
         else:
-            self.p1.display = False
+            self.player_list.remove(self.p1)
 
     # Update positions of players
     def Network_move(self, data):
@@ -113,7 +113,7 @@ class Client(ConnectionListener, ForestFoes):
             sys.stderr.flush()
             sys.exit(1)
 
-    # Other client started shooting, change the sprite
+    # Other client started shooting, change sprite, add arrow to list
     def Network_shoot(self, data):
         player = data['p']
         if player == 'p1' and not self.is_p1:

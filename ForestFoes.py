@@ -54,8 +54,7 @@ class Player(pygame.sprite.Sprite):
             self.bg_page = MAX_PAGE
             self.player = 2
         self.health = 100
-        self.display = False
-        self.is_shooting = False
+        self.mask = pygame.mask.from_surface(self.image)
         self.arrows = pygame.sprite.Group()
 
     # Methods
@@ -120,7 +119,6 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.image.load("resources/images/p2_shoot.png").convert_alpha()
         if self.direction != "left":
             self.image = pygame.transform.flip(self.image, 1, 0)
-        self.is_shooting = True
 
     def standing(self):
         if self.player == 1:
@@ -129,7 +127,6 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
         if self.direction != "left":
             self.image = pygame.transform.flip(self.image, 1, 0)
-        self.is_shooting = False
 
 
 class Tree(pygame.sprite.Sprite):
@@ -142,6 +139,7 @@ class Tree(pygame.sprite.Sprite):
             page = random.randrange(0, MAX_PAGE, 1)
         self.rect = pygame.Rect(x_pos, y_pos, size[0], size[1])
         self.bg_page = page
+        self.mask = pygame.mask.from_surface(self.image)
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
@@ -174,6 +172,10 @@ class Arrow(pygame.sprite.Sprite):
     def get_loc(self):
         return [self.rect.x, self.rect.y]
 
+    def draw(self, surface):
+        surface.blit(self.image, self.rect)
+
+
 # Main Client Class
 class ForestFoes(object):
 
@@ -191,13 +193,10 @@ class ForestFoes(object):
         self.player_list = pygame.sprite.Group()
         self.arrow_list = pygame.sprite.Group()
         self.tree_list = pygame.sprite.Group()
-        self.sprite_list = pygame.sprite.Group()
-        self.sprite_list.add(self.player_list, self.tree_list, self.arrow_list)
 
      # Generate random trees
     def gen_trees(self):
         for i in range(NUM_TREES):
-            self.tree_list.empty()
             self.tree_list.add(Tree())
 
     # Returns string telling which player the client is
@@ -247,10 +246,18 @@ class ForestFoes(object):
             player = self.p1
             # Background
             screen.blit(background, [0, 0], [player.bg_page*X_DIM, 0, X_DIM, Y_DIM])
+
             # Sprites
-            for sprite in self.sprite_list:
+            for sprite in self.player_list:
                 if sprite.bg_page == player.bg_page:
                     sprite.draw(screen)
+            for sprite in self.arrow_list:
+                if sprite.bg_page == player.bg_page:
+                    sprite.draw(screen)
+            for sprite in self.tree_list:
+                if sprite.bg_page == player.bg_page:
+                    sprite.draw(screen)
+
             # Health bar
             hp_width = self.p1.health*2
             screen.fill(RED, (10, 25, 200, 15))
@@ -262,10 +269,18 @@ class ForestFoes(object):
             player = self.p2
             # Background
             screen.blit(background, [0, 0], [player.bg_page * X_DIM, 0, X_DIM, Y_DIM])
+
             # Sprites
-            for sprite in self.sprite_list:
+            for sprite in self.player_list:
                 if sprite.bg_page == player.bg_page:
                     sprite.draw(screen)
+            for sprite in self.arrow_list:
+                if sprite.bg_page == player.bg_page:
+                    sprite.draw(screen)
+            for sprite in self.tree_list:
+                if sprite.bg_page == player.bg_page:
+                    sprite.draw(screen)
+
             # Health bar
             hp_width = self.p2.health*2
             screen.fill(RED, (X_DIM-10-200, 25, 200, 15))

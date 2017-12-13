@@ -213,13 +213,13 @@ class ForestServer(Server):
             other_player = self.p1
 
         # Perform collision detection
-        arrows_hit = pygame.sprite.spritecollide(player.sprite, other_player.arrows, False)
         # Check the players were in the same room
         if player.bg_page == other_player.bg_page:
             # For each collision, subtract health
-            for arrow in arrows_hit:
-                arrow.kill()
-                player.sprite.health -= 10
+            for arrow in other_player.arrows:
+                if pygame.sprite.collide_mask(arrow, player.sprite):
+                    arrow.kill()
+                    player.sprite.health -= 10
                 if(player.sprite.health <=0):
                     self.game_over(player)
 
