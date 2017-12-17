@@ -8,12 +8,33 @@ from ForestFoes import Player, Arrow, Tree
 from PodSixNet.Server import Server
 from PodSixNet.Channel import Channel
 
+# Define some variables
 X_DIM = 720
 Y_DIM = 480
-NUM_TREES = 3
-TREE_WIDTH = 370
-MAX_PAGE = 2
 SCREENSIZE = (X_DIM, Y_DIM)
+WHITE=(255, 255, 255)
+GREEN = (0, 255,   0)
+RED = (255,   0,   0)
+
+
+background = pygame.image.load("resources/images/pixel_forest_long.png")
+BG_WIDTH = background.get_width()
+MAX_PAGE = (BG_WIDTH//X_DIM)-1
+NUM_TREES = MAX_PAGE*3
+TREE_WIDTH = 370//2
+tree_pos_list = []
+#tree_pos_list = [[0,300], [1,400], [1,200]]
+# Generate random trees
+for i in range(NUM_TREES):
+    x_pos = random.randrange(0, X_DIM, TREE_WIDTH)
+    page = random.randrange(0, MAX_PAGE, 1)
+    tree_pos_list.append([page, x_pos])
+
+# for checking whether players are behind a tree
+# 1. page, 2. left boundary, 3. right boundary
+tree_boundaries_list = []
+for tree in tree_pos_list:
+    tree_boundaries_list.append([tree[0], tree[1]+140, tree[1]+190])
 
 # Server representation of a single connected client
 class ServerChannel(Channel):
@@ -23,10 +44,10 @@ class ServerChannel(Channel):
         self.id = str(self._server.next_id())
         self._player_pos = None
         self.bg_page = 0
-        self.p1 = None
-        self.p2 = None
+        self.is_p1 = None
         self.sprite = Player(1)  # Each player needs a sprite representation
         self.arrows = pygame.sprite.Group() # Each player has a list of arrows
+        self.restart = False
 
     @property
     def player_pos(self):
@@ -38,7 +59,11 @@ class ServerChannel(Channel):
         self._player_pos = self.sprite.rect.x, self.sprite.direction
 
     def which_player(self):
-        return str("p1") if self.p1 else str("p2")
+        return str("p1") if self.is_p1 else str("p2")
+
+    def reset(self):
+        self.sprite.reset()
+        self.arrows.empty()
 
     # Pass on data to all connected clients
     def pass_on(self, data):
@@ -57,20 +82,36 @@ class ServerChannel(Channel):
     def Network_move(self, data):
         self.player_pos = data['p_pos']
         self.bg_page = data['p_pg']
+
+        # Check if player is behind a tree
+        p_x = self.sprite.rect.x+64 # center of player sprite
+        p_hidden = False
+        for tree in tree_boundaries_list:
+            if self.bg_page == tree[0] and tree[1] <= p_x <= tree[2]:
+                p_hidden = True
+
+        if self.sprite.hidden != p_hidden:
+            self.sprite.hidden = p_hidden
+            self.pass_on({"action": "hide", "p": self.which_player(), "hidden": p_hidden})
+
         self.pass_on(data)
 
    # Processes the "shoot" action from client
     def Network_shoot(self, data):
-        player = self.sprite
+        [x, direction] = data['p_pos']
+        pg = data['p_pg']
         # Set the arrow so it is where the player is
-        arrow = Arrow(*(player.pos), player.bg_page)
+        arrow = Arrow(x, direction, pg)
         # Add the arrow to the list
         self.arrows.add(arrow)
         self.pass_on(data)
 
     # Processes restart from client
     def Network_restart(self, data):
-        self._server.restart()
+        self.reset()
+        self.player_pos = data['p_pos']
+        self.bg_page = data['p_pg']
+        self._server.restart(self.which_player())
 
 class ForestServer(Server):
     channelClass = ServerChannel
@@ -82,14 +123,6 @@ class ForestServer(Server):
         self.p2 = None
         self.ready = False
         self.waiting_player_list = deque()  # Make a FIFO queue for waiting clients (no limit to waiting clients)
-        self.tree_list = pygame.sprite.Group()
-        self.tree_pos_list = []
-        # Generate random trees
-        for i in range(NUM_TREES):
-            x_pos = random.randrange(0, X_DIM, TREE_WIDTH)
-            page = random.randrange(0, MAX_PAGE-1, 1)
-            self.tree_pos_list.append([page, x_pos, 0])
-            self.tree_list.add(Tree([page, x_pos, 0]))
 
         print('Server launched')
 
@@ -102,6 +135,7 @@ class ForestServer(Server):
         if self.p1 and self.p2:
             channel.Send({"action": "init", "p": "full"})
             self.waiting_player_list.append(channel)
+            print("New player in queue")
         else:
             self.add_player(channel)
 
@@ -119,31 +153,28 @@ class ForestServer(Server):
         # Determine if P1 or P2
         if self.p1 is None:
             self.p1 = player
-            player.p1 = True
+            player.is_p1 = True
+            player.Send({"action": "init", "p": 'p1'})
             print("New P1 (" + str(player.addr) + ")")
         elif self.p1 and self.p2 is None:
             self.p2 = player
-            player.p1 = False
+            player.is_p1 = False
+            player.Send({"action": "init", "p": 'p2'})
             print("New P2 (" + str(player.addr) + ")")
+
         else:
             sys.stderr.write("ERROR: Couldn't determine player from client (P1 = "
                              + str(self.p1) + ",  P2 = "
                              + str(self.p2) + ".\n")
             sys.stderr.flush()
             sys.exit(1)
-        # If only P1, tell client they're P1
-        if self.p2 is None:
-            player.Send({"action": "init", "p": 'p1', "trees": self.tree_pos_list})
-        # Else if P2, notify P2 and send position data
-        else:
-            self.p2.Send({"action": "init", "p": 'p2', "trees": self.tree_pos_list})
 
-            self.send_to_all({"action": "ready"})
-            # Only send position data from P1 -> P2
-            loc = list(self.p1.player_pos)
-            pg = self.p1.bg_page
-            self.send_to_all({"action": "move", "p": 'p1', "p_pos": loc, "p_pg": pg})
+        if self.p1 and self.p2:
+            self.p1.restart = False
+            self.p2.restart = False
             self.ready = True
+            self.send_to_all({"action": "ready", "trees": tree_pos_list})
+
 
     # Deletes a player from the server
     def delete_player(self, player):
@@ -172,6 +203,41 @@ class ForestServer(Server):
         self.send_to_all({"action": "end", "p": dead})
         self.ready = False
 
+    def restart(self, player):
+        if self.p1 is None or self.p2 is None:
+            return
+
+        if player == "p1":
+            self.p1.restart = True
+            print("P1 restarting")
+        else:
+            self.p2.restart = True
+            print("P2 restarting")
+
+        if self.p1.restart and self.p2.restart:
+            self.p1.restart = False
+            self.p2.restart = False
+
+            # Generate new tree positions once, the first time a player presses restart
+            global tree_pos_list
+            tree_pos_list = []
+            #tree_pos_list = [[0, 300], [1, 400], [1, 200]]
+            # Generate random trees
+            for i in range(NUM_TREES):
+                x_pos = random.randrange(0, X_DIM, TREE_WIDTH)
+                page = random.randrange(0, MAX_PAGE, 1)
+                tree_pos_list.append([page, x_pos])
+
+            # for checking whether players are behind a tree
+            # 1. page, 2. left boundary, 3. right boundary
+            global tree_boundaries_list
+            tree_boundaries_list = []
+            for tree in tree_pos_list:
+                tree_boundaries_list.append([tree[0], tree[1] + 140, tree[1] + 190])
+
+            self.ready = True
+            self.send_to_all({"action": "ready", "trees": tree_pos_list})
+
     # Send list of arrow locations to players
     def gen_arrow_locs(self):
         arrow_locs = list()
@@ -194,8 +260,9 @@ class ForestServer(Server):
         self.p2.arrows.update()
 
         # Do collision detection
-        self.handle_arrow_hits(self.p1)
-        self.handle_arrow_hits(self.p2)
+        if self.ready:
+            self.handle_arrow_hits(self.p1)
+            self.handle_arrow_hits(self.p2)
 
         # Generate position list
         arrow_list = self.gen_arrow_locs()
@@ -209,7 +276,7 @@ class ForestServer(Server):
 
     # Collision detection on arrows
     def handle_arrow_hits(self, player):
-        if player.p1:
+        if player.is_p1:
             other_player = self.p2
         else:
             other_player = self.p1
@@ -224,20 +291,7 @@ class ForestServer(Server):
                     player.sprite.health -= 10
                 if(player.sprite.health <=0):
                     self.game_over(player)
-
-    def handle_hiding(self):
-        for player in {self.p1, self.p2}:
-            for tree in self.tree_list:
-                if player.bg_page == tree.bg_page:
-                    # center of the player sprite
-                    p_x = player.sprite.rect.x+64
-                    # bounds of the trunk of the tree
-                    t_min = tree.rect.x+140
-                    t_max = tree.rect.x+190
-                    if t_min <= p_x <= t_max:
-                        player.sprite.hidden = True
-                    else: player.sprite.hidden = False
-        self.send_to_all({"action": "hide", "p1": self.p1.sprite.hidden, "p2": self.p2.sprite.hidden})
+                    break
 
     # Send data to all connected clients
     def send_to_all(self, data):
@@ -252,8 +306,7 @@ class ForestServer(Server):
             self.Pump()
             if self.ready:
                 self.handle_arrows()
-                self.handle_hiding()
-            sleep(0.0001)  # 0.01, 0.0001?
+            sleep(0.01)  # 0.01, 0.0001?
 
 # get command line argument of server, port
 if len(sys.argv) != 2:

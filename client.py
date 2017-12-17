@@ -1,5 +1,6 @@
 import sys
 import pygame
+from pygame.locals import *
 from time import sleep
 from PodSixNet.Connection import connection, ConnectionListener
 from ForestFoes import ForestFoes, Player, Arrow, Tree
@@ -8,7 +9,6 @@ from ForestFoes import ForestFoes, Player, Arrow, Tree
 class Client(ConnectionListener, ForestFoes):
     def __init__(self, host, port):
         self.Connect((host, port))
-        self.ready = False
         ForestFoes.__init__(self)
 
     # Main game loop for client
@@ -50,18 +50,32 @@ class Client(ConnectionListener, ForestFoes):
         player.shooting()
         self.send_action('shoot')
 
+    # Display win/lose condition
+    def player_end(self, player):
+        self.game_state = "game over"
+        if (self.is_p1 and player == 'p2') or (not self.is_p1 and player == 'p1'):
+            self.winLoseLabel = 'YOU WON THE DAY'
+        else:
+            self.winLoseLabel = 'YOU LOST YOUR WAY'
+
+    def player_restart(self):
+        self.tree_list.empty()
+        self.arrow_list.empty()
+        self.ready = False
+        self.p1.reset()
+        self.p2.reset()
+        self.send_action('restart')n
+
     ###############################
     ### Network event callbacks ###
     ###############################
 
     # Perform client setup
     def Network_init(self, data):
-        for tree_pos in data['trees']:
-            self.tree_list.add(Tree(tree_pos))
         if data["p"] == 'p1':
             self.is_p1 = True
             self.player_list.add(self.p1)
-            print("No other players currently connected. You are P1.")
+            print("You are P1.")
             # Send position to server
             self.send_action('move')
         elif data["p"] == 'p2':
@@ -81,18 +95,26 @@ class Client(ConnectionListener, ForestFoes):
 
     # Network is ready, start game
     def Network_ready(self, data):
-        self.playersLabel = "You are " + self.which_player().capitalize() + ". Battle!"
+        self.titleLabel = ">> Loose your arrows! <<"
+        self.playersLabel = "You are " + self.which_player().capitalize()
+        self.p1.reset()
+        self.p2.reset()
         self.player_list.add(self.p1, self.p2)
+
+        for tree_pos in data['trees']:
+            self.tree_list.add(Tree(tree_pos))
+
+        self.game_state = "ready"
         self.ready = True
 
-    # Player left network, delete player from client
+    # Player left network, delete player from client, reset the game
     def Network_player_left(self, data):
         self.playersLabel = "Other player left server"
-        self.ready = False
         if self.is_p1:
             self.player_list.remove(self.p2)
         else:
             self.player_list.remove(self.p1)
+        self.player_restart()
 
     # Update positions of players
     def Network_move(self, data):
@@ -124,16 +146,22 @@ class Client(ConnectionListener, ForestFoes):
     # Arrow data retrieved from server
     def Network_arrows(self, data):
         self.update_arrows(data['arrows'])
-        self.p1.health = data['p1_health']
-        self.p2.health = data['p2_health']
+        if(self.p1.health != data['p1_health']):
+            self.hit()
+            self.p1.health = data['p1_health']
+        if (self.p2.health != data['p2_health']):
+            self.hit()
+            self.p2.health = data['p2_health']
 
     def Network_hide(self, data):
-        self.p1.hidden = data['p1']
-        self.p2.hidden = data['p2']
+        if data['p'] == "p1":
+            self.p1.hidden = data['hidden']
+        else:
+            self.p2.hidden = data['hidden']
 
     # A player has been defeated, end the game
     def Network_end(self, data):
-        self.game_end(data['p'])
+        self.player_end(data['p'])
         self.ready = False
 
     ########################################
