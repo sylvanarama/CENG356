@@ -64,7 +64,7 @@ class Client(ConnectionListener, ForestFoes):
         self.ready = False
         self.p1.reset()
         self.p2.reset()
-        self.send_action('restart')n
+        self.send_action('restart')
 
     ###############################
     ### Network event callbacks ###
@@ -110,6 +110,9 @@ class Client(ConnectionListener, ForestFoes):
     # Player left network, delete player from client, reset the game
     def Network_player_left(self, data):
         self.playersLabel = "Other player left server"
+        if self.game_state == "play":
+            self.game_state = "waiting"
+            self.titleLabel = ">> Lying in Wait <<"
         if self.is_p1:
             self.player_list.remove(self.p2)
         else:
