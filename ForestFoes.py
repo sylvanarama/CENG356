@@ -167,9 +167,6 @@ class Tree(pygame.sprite.Sprite):
         super(Tree, self).__init__()
         self.image = pygame.image.load("resources/images/tree01.png").convert_alpha()
         [page, x_pos] = pos
-        # if x_pos == 0 and page == 0:
-        #     x_pos = random.randrange(0, X_DIM, self.image.get_width())
-        #     page = random.randrange(0, MAX_PAGE, 1)
         self.rect = pygame.Rect(x_pos, 0, size[0], size[1])
         self.bg_page = page
 
