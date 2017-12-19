@@ -1,6 +1,5 @@
 import pygame
 from os import environ
-from sys import exit
 
 # Define some variables
 X_DIM = 720
@@ -24,15 +23,12 @@ game_over_bg = pygame.image.load("resources/images/game_over.png")
 BG_WIDTH = background.get_width()
 MAX_PAGE = (BG_WIDTH//X_DIM)-1
 
-
-
 # Configure the text
 pygame.font.init()
 fnt = pygame.font.SysFont("Arial", 14)
 fnt_big = pygame.font.SysFont("Courier", 50)
 fnt_med = pygame.font.SysFont("Courier", 30)
 txtpos = (100, 90)
-
 
 # This class represents a player. It derives from the "Sprite" class in Pygame.
 class Player(pygame.sprite.Sprite):
@@ -41,6 +37,7 @@ class Player(pygame.sprite.Sprite):
         # Call the parent class (Sprite) constructor
         super().__init__()
         if player == 1:
+            # Set player 1 facing right on the first "page" of the arena
             self.image = pygame.image.load("resources/images/p1_stand.png").convert_alpha()
             self.image = pygame.transform.flip(self.image, 1, 0)
             size = (width, height) = self.image.get_size()
@@ -49,12 +46,14 @@ class Player(pygame.sprite.Sprite):
             self.bg_page = 0
             self.player = 1
         else:
+            # Position player 2 facing left on the last, right-most "page" of the arena
             self.image = pygame.image.load("resources/images/p2_stand.png").convert_alpha()
             size = (width, height) = self.image.get_size()
             self.rect = pygame.Rect(X_DIM - (125 + size[0]), 270, size[0], size[1])
             self.direction = "left"
             self.bg_page = MAX_PAGE
             self.player = 2
+        # Set the player's health to full and create a mask for collision detection
         self.health = 100
         self.mask = pygame.mask.from_surface(self.image)
         self.arrows = pygame.sprite.Group()
@@ -70,8 +69,11 @@ class Player(pygame.sprite.Sprite):
         [self.rect.x, self.direction, self.bg_page] = pos
 
     # Update player's position
+    # Check if they have moved off-screen
     def update(self, pos):
         [x, direction, page] = pos
+        # Check if the player is off screen
+        # move to the next page if so
         if (x < -20) or (x >= X_DIM):
             if direction == "left":
                 if page == 0: x = -20
@@ -83,7 +85,7 @@ class Player(pygame.sprite.Sprite):
                 else:
                     page += 1
                     x = (x % X_DIM)
-
+        # Flip the sprite if the player is moving in the otehr direction
         if direction != self.direction:
             self.image = pygame.transform.flip(self.image, 1, 0)
             self.mask = pygame.mask.from_surface(self.image)
@@ -114,6 +116,7 @@ class Player(pygame.sprite.Sprite):
     def draw(self, surface):
         surface.blit(self.image, self.rect)
 
+    # Change to the "shooting" sprite if the player is firing arrows
     def shooting(self):
         if self.player == 1:
             self.image = pygame.image.load("resources/images/p1_shoot.png").convert_alpha()
@@ -123,6 +126,7 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.transform.flip(self.image, 1, 0)
         self.mask = pygame.mask.from_surface(self.image)
 
+    # Change to the "standing" sprite if the player is moving
     def standing(self):
         if self.player == 1:
             self.image = pygame.image.load("resources/images/p1_stand.png").convert_alpha()
@@ -132,6 +136,7 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.transform.flip(self.image, 1, 0)
         self.mask = pygame.mask.from_surface(self.image)
 
+    # Reset all relevant values so play can begin again
     def reset(self):
         if self.player == 1:
             self.image = pygame.image.load("resources/images/p1_stand.png").convert_alpha()
@@ -146,7 +151,7 @@ class Player(pygame.sprite.Sprite):
         self.health = 100
         self.hidden = False
 
-
+# This class represents a "tree" which the players can hide behind
 class Tree(pygame.sprite.Sprite):
     def __init__(self, pos):
         super(Tree, self).__init__()
@@ -166,7 +171,7 @@ class Tree(pygame.sprite.Sprite):
     def draw(self, surface):
         surface.blit(self.image, self.rect)
 
-
+# This class represents the arrows player shoot at each other
 class Arrow(pygame.sprite.Sprite):
     def __init__(self, pos):
         # Call the parent class (Sprite) constructor
@@ -174,12 +179,14 @@ class Arrow(pygame.sprite.Sprite):
         self.image = pygame.image.load("resources/images/arrow.png").convert_alpha()
         [x_pos, direction, page] = pos
         self.rect = self.image.get_rect()
+        # Create the arrow sprite at location of the arrow in the player's "shooting" sprite
         self.rect.x = x_pos+20
         self.rect.y = 310
         self.direction = direction
         self.bg_page = page
         if direction == "right":
             self.image = pygame.transform.flip(self.image, 1, 0)
+        # The number of pixels the arrow moves each cycle
         self.arrow_speed = 10
 
     @property
@@ -200,7 +207,7 @@ class Arrow(pygame.sprite.Sprite):
         surface.blit(self.image, self.rect)
 
 
-# Main Client Class
+# The main client class: manages events and draws the game elements on the screen
 class ForestFoes(object):
 
     def __init__(self):
@@ -224,7 +231,8 @@ class ForestFoes(object):
     # Returns the player object which the client is
     def current_player(self):
         return self.p1 if self.is_p1 else self.p2
-    
+
+    # Refill the arrow list with updated positions sent from the server
     def update_arrows(self, arrows):
         self.arrow_list.empty()
         for pos in arrows:
