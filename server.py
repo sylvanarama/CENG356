@@ -37,33 +37,17 @@ for tree in tree_pos_list:
     tree_boundaries_list.append([tree[0], tree[1]+140, tree[1]+190])
 
 # Server representation of a single connected client
-class ServerChannel(Channel):
+class ServerChannel(Channel, Player):
 
     def __init__(self, *args, **kwargs):
         Channel.__init__(self, *args, **kwargs)
+        Player.__init__(self)
         self.id = str(self._server.next_id())
-        self._player_pos = None
-        self.bg_page = 0
         self.is_p1 = None
-        self.sprite = Player(1)  # Each player needs a sprite representation
-        self.arrows = pygame.sprite.Group() # Each player has a list of arrows
         self.restart = False
-
-    @property
-    def player_pos(self):
-        return self._player_pos
-
-    @player_pos.setter
-    def player_pos(self, value):
-        self.sprite.update(value)
-        self._player_pos = self.sprite.rect.x, self.sprite.direction
 
     def which_player(self):
         return str("p1") if self.is_p1 else str("p2")
-
-    def reset(self):
-        self.sprite.reset()
-        self.arrows.empty()
 
     # Pass on data to all connected clients
     def pass_on(self, data):
@@ -80,28 +64,25 @@ class ServerChannel(Channel):
 
     # Processes the "move" action from client
     def Network_move(self, data):
-        self.player_pos = data['p_pos']
-        self.bg_page = data['p_pg']
+        self.pos = data['p_pos']
 
         # Check if player is behind a tree
-        p_x = self.sprite.rect.x+64 # center of player sprite
+        p_x = self.rect.x+64 # center of player sprite
         p_hidden = False
         for tree in tree_boundaries_list:
             if self.bg_page == tree[0] and tree[1] <= p_x <= tree[2]:
                 p_hidden = True
 
-        if self.sprite.hidden != p_hidden:
-            self.sprite.hidden = p_hidden
+        if self.hidden != p_hidden:
+            self.hidden = p_hidden
             self.pass_on({"action": "hide", "p": self.which_player(), "hidden": p_hidden})
 
         self.pass_on(data)
 
    # Processes the "shoot" action from client
     def Network_shoot(self, data):
-        [x, direction] = data['p_pos']
-        pg = data['p_pg']
         # Set the arrow so it is where the player is
-        arrow = Arrow(x, direction, pg)
+        arrow = Arrow(data['p_pos'])
         # Add the arrow to the list
         self.arrows.add(arrow)
         self.pass_on(data)
@@ -109,8 +90,7 @@ class ServerChannel(Channel):
     # Processes restart from client
     def Network_restart(self, data):
         self.reset()
-        self.player_pos = data['p_pos']
-        self.bg_page = data['p_pg']
+        self.pos = data['p_pos']
         self._server.restart(self.which_player())
 
 class ForestServer(Server):
@@ -154,11 +134,13 @@ class ForestServer(Server):
         if self.p1 is None:
             self.p1 = player
             player.is_p1 = True
+            player.set_player(1)
             player.Send({"action": "init", "p": 'p1'})
             print("New P1 (" + str(player.addr) + ")")
         elif self.p1 and self.p2 is None:
             self.p2 = player
             player.is_p1 = False
+            player.set_player(2)
             player.Send({"action": "init", "p": 'p2'})
             print("New P2 (" + str(player.addr) + ")")
 
@@ -183,10 +165,12 @@ class ForestServer(Server):
             self.p1 = None
             self.send_to_all({"action": "player_left"})
             print("Deleted P1 (" + str(player.addr) + ")")
+            if self.p2 is not None: self.p2.reset()
         elif self.p2 is player:
             self.p2 = None
             self.send_to_all({"action": "player_left"})
             print("Deleted P2 (" + str(player.addr) + ")")
+            if self.p1 is not None: self.p1.reset()
         elif player in self.waiting_player_list:
             self.waiting_player_list.remove(player)
         else:
@@ -200,6 +184,8 @@ class ForestServer(Server):
         dead = player.which_player()
         print(dead, " has died")
         # Send message to clients that a player was defeated
+        self.p1.reset()
+        self.p2.reset()
         self.send_to_all({"action": "end", "p": dead})
         self.ready = False
 
@@ -237,19 +223,6 @@ class ForestServer(Server):
 
             self.ready = True
             self.send_to_all({"action": "ready", "trees": tree_pos_list})
-
-    # Send list of arrow locations to players
-    def gen_arrow_locs(self):
-        arrow_locs = list()
-        for player in {self.p1, self.p2}:
-            for arrow in player.arrows:
-                # Remove the arrow if it flies off the screen
-                if arrow.rect.x < -15 or arrow.rect.x > (X_DIM + 15):
-                    arrow.kill()
-                    break
-                # If we're here, arrow is still moving and should be sent to clients
-                arrow_locs.append((arrow.rect.x, arrow.direction, arrow.bg_page))
-        return arrow_locs
     
     def handle_arrows(self):
         # Check if there are arrows (if all arrows are cleared, still should update screen to clear arrows)
@@ -259,39 +232,40 @@ class ForestServer(Server):
         self.p1.arrows.update()
         self.p2.arrows.update()
 
-        # Do collision detection
-        if self.ready:
-            self.handle_arrow_hits(self.p1)
-            self.handle_arrow_hits(self.p2)
+        # Collision detection on arrows
+        for player in {self.p1, self.p2}:
+            if player.is_p1:
+                other_player = self.p2
+            else:
+                other_player = self.p1
+
+            # Check the players were in the same room and visible
+            if player.bg_page == other_player.bg_page and not player.hidden:
+                # For each collision, subtract health
+                for arrow in other_player.arrows:
+                    if pygame.sprite.collide_mask(arrow, player):
+                        arrow.kill()
+                        player.health -= 10
+                        self.send_to_all({"action": "hit", "p": player.which_player()})
+                    if (player.health <= 0):
+                        self.game_over(player)
+                        return
 
         # Generate position list
-        arrow_list = self.gen_arrow_locs()
+        # Send list of arrow locations to players
+        arrow_list = []
+        for player in {self.p1, self.p2}:
+            for arrow in player.arrows:
+                # Remove the arrow if it flies off the screen
+                if arrow.rect.x < -15 or arrow.rect.x > (X_DIM + 15):
+                    arrow.kill()
+                    break
+                # If we're here, arrow is still moving and should be sent to clients
+                arrow_list.append((arrow.pos))
 
         # Send new arrow lists
         if arrow_list or player_had_arrows:
-            self.send_to_all({"action": "arrows",
-                              "arrows": arrow_list,
-                              "p1_health": self.p1.sprite.health,
-                              "p2_health": self.p2.sprite.health})
-
-    # Collision detection on arrows
-    def handle_arrow_hits(self, player):
-        if player.is_p1:
-            other_player = self.p2
-        else:
-            other_player = self.p1
-
-        # Perform collision detection
-        # Check the players were in the same room and visible
-        if player.bg_page == other_player.bg_page and not player.sprite.hidden:
-            # For each collision, subtract health
-            for arrow in other_player.arrows:
-                if pygame.sprite.collide_mask(arrow, player.sprite):
-                    arrow.kill()
-                    player.sprite.health -= 10
-                if(player.sprite.health <=0):
-                    self.game_over(player)
-                    break
+            self.send_to_all({"action": "arrows", "arrows": arrow_list})
 
     # Send data to all connected clients
     def send_to_all(self, data):

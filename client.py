@@ -5,6 +5,17 @@ from time import sleep
 from PodSixNet.Connection import connection, ConnectionListener
 from ForestFoes import ForestFoes, Player, Arrow, Tree
 
+# Load audio
+hit = pygame.mixer.Sound("resources/audio/hit.wav")
+shoot = pygame.mixer.Sound("resources/audio/shoot.wav")
+walk = pygame.mixer.Sound("resources/audio/walk.wav")
+hit.set_volume(0.5)
+shoot.set_volume(0.5)
+walk.set_volume(0.025)
+pygame.mixer.music.load('resources/audio/Forest_Foes.wav')
+pygame.mixer.music.play(-1, 0.0)
+pygame.mixer.music.set_volume(0.5)
+
 # Main Client Class
 class Client(ConnectionListener, ForestFoes):
     def __init__(self, host, port):
@@ -27,9 +38,8 @@ class Client(ConnectionListener, ForestFoes):
             return
         player = self.current_player()
         pos = player.pos
-        pg = player.bg_page
         # Send to server
-        connection.Send({"action": action, "p": self.which_player(), "p_pos": pos, "p_pg": pg})
+        connection.Send({"action": action, "p": self.which_player(), "p_pos": pos})
 
     #######################
     ### Event callbacks ###
@@ -38,6 +48,7 @@ class Client(ConnectionListener, ForestFoes):
     def player_move(self, direction):
         if self.is_p1 is None:
             return
+        walk.play()
         player = self.current_player()
         player.move(direction)
         player.standing()
@@ -46,17 +57,10 @@ class Client(ConnectionListener, ForestFoes):
     def player_shoot(self):
         if self.is_p1 is None:
             return
+        shoot.play()
         player = self.current_player()
         player.shooting()
         self.send_action('shoot')
-
-    # Display win/lose condition
-    def player_end(self, player):
-        self.game_state = "game over"
-        if (self.is_p1 and player == 'p2') or (not self.is_p1 and player == 'p1'):
-            self.winLoseLabel = 'YOU WON THE DAY'
-        else:
-            self.winLoseLabel = 'YOU LOST YOUR WAY'
 
     def player_restart(self):
         self.tree_list.empty()
@@ -65,6 +69,10 @@ class Client(ConnectionListener, ForestFoes):
         self.p1.reset()
         self.p2.reset()
         self.send_action('restart')
+
+    def player_leave(self):
+        # Call server: delete_player
+        quit()
 
     ###############################
     ### Network event callbacks ###
@@ -117,18 +125,21 @@ class Client(ConnectionListener, ForestFoes):
             self.player_list.remove(self.p2)
         else:
             self.player_list.remove(self.p1)
-        self.player_restart()
+        self.tree_list.empty()
+        self.arrow_list.empty()
+        self.ready = False
+        self.p1.reset()
+        self.p2.reset()
 
     # Update positions of players
     def Network_move(self, data):
         position = data['p_pos']
-        page = data['p_pg']
         player = data['p']
         if player == 'p1' and not self.is_p1:
-            self.p1.update(position, page)
+            self.p1.update(position)
             self.p1.standing()
         elif player == 'p2' and self.is_p1:
-            self.p2.update(position, page)
+            self.p2.update(position)
             self.p2.standing()
         elif player in ('p1', 'p2'):  # This is client's position coming back from player
             pass  # TODO: Anti-cheat detection here
@@ -137,6 +148,12 @@ class Client(ConnectionListener, ForestFoes):
             sys.stderr.write(str(data) + "\n")
             sys.stderr.flush()
             sys.exit(1)
+
+    def Network_hide(self, data):
+        if data['p'] == "p1":
+            self.p1.hidden = data['hidden']
+        else:
+            self.p2.hidden = data['hidden']
 
     # Other client started shooting, change sprite, add arrow to list
     def Network_shoot(self, data):
@@ -149,23 +166,24 @@ class Client(ConnectionListener, ForestFoes):
     # Arrow data retrieved from server
     def Network_arrows(self, data):
         self.update_arrows(data['arrows'])
-        if(self.p1.health != data['p1_health']):
-            self.hit()
-            self.p1.health = data['p1_health']
-        if (self.p2.health != data['p2_health']):
-            self.hit()
-            self.p2.health = data['p2_health']
 
-    def Network_hide(self, data):
-        if data['p'] == "p1":
-            self.p1.hidden = data['hidden']
-        else:
-            self.p2.hidden = data['hidden']
+    def Network_hit(self, data):
+        player = data['p']
+        if player == 'p1':
+            self.p1.health -= 10
+        elif player == 'p2':
+            self.p2.health -= 10
+        shoot.play()
 
     # A player has been defeated, end the game
     def Network_end(self, data):
-        self.player_end(data['p'])
+        player = data['p']
+        if (self.is_p1 and player == 'p2') or (not self.is_p1 and player == 'p1'):
+            self.winLoseLabel = 'YOU WON THE DAY'
+        else:
+            self.winLoseLabel = 'YOU LOST YOUR WAY'
         self.ready = False
+        self.game_state = "game over"
 
     ########################################
     ### Built-in network event callbacks ###
