@@ -1,0 +1,20 @@
+@startuml
+skinparam monochrome true
+
+Sprite <|-- Player
+Sprite <|-- Arrow
+Sprite <|-- Tree
+Player "2" <--* ForestFoes
+Arrow "0.." <--* ForestFoes
+Tree "0.." <--* ForestFoes
+ForestFoes <|-- Client
+ConnectionListener <|-- Client
+Client - ServerChannel
+Player <|- ServerChannel
+Channel <|-- ServerChannel
+Server <|-- ForestServer
+ForestServer *--> "0..2" ServerChannel
+
+
+
+@enduml

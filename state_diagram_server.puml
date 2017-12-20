@@ -1,0 +1,83 @@
+@startuml
+
+skinparam monochrome true
+skinparam StateFontSize 20
+skinparam StateAttributeFontSize 16
+skinparam ArrowFontSize 18
+
+[*] --> NotReady
+
+state NotReady {
+  Init: Generate tree positions
+  [*] -> Init
+
+  Waiting: Waiting for 2 clients
+  Init --> Waiting
+
+  Add_player: Init player to p1 or p2
+  Add_player:   >>send action: init
+  Add_player: Check if p1 and p2 init
+  Add_player:   >> send action: init
+  Waiting --> Add_player: new p, p < 2
+  Add_player --> Waiting: p < 2
+  Add_player --> Ready: p = 2
+
+  Delete_player: Remove player, reset other if present
+  Delete_player: >> send action: player left
+  Waiting --> Delete_player: player quit
+  Delete_player --> Waiting
+
+  Game_over: Reset player attributes
+  Game_over: >> send action: end
+  Game_over --> Restart: p1 or p2 restart
+  Game_over -u-> Delete_player: player quit
+
+  Restart: Generate new tree positions
+  Restart: Check if p1 & p2 restart
+  Restart: >> send action: ready
+  Restart -d-> Ready: p1 & p2 restart
+  Restart --> Game_over: p1 xor p2 restart
+
+
+
+
+
+}
+
+state Ready {
+    Receive_data: Wait for action from Client
+    [*]-> Receive_data
+    Receive_data --> Receive_data: new client
+
+    Close: Player disconnected
+    Receive_data -u-> Close: action: quit
+    Close --> Delete_player
+
+    Move: Update player positions
+    Move: >> send action: move
+    Move: Check if player hidden
+    Move: >> send action: hide
+    Receive_data -u-> Move: action: move
+    Move -d-> Receive_data
+
+    Shoot: Add arrow to list
+    Shoot: >> send action: shoot
+    Receive_data -u-> Shoot: action: shoot
+    Shoot -d-> Receive_data
+
+    Handle_arrows: Update arrow locations
+    Handle_arrows: >> send action: arrows
+    Handle_arrows: Collision detection
+    Handle_arrows: >> send action: hit
+    Receive_data -d-> Handle_arrows
+    Handle_arrows -u-> Receive_data
+    Handle_arrows --> Game_over: p1 or p2 health <= 0
+
+
+
+
+
+
+}
+
+@enduml

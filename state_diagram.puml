@@ -1,0 +1,59 @@
+@startuml
+skinparam monochrome true
+skinparam StateFontSize 20
+skinparam StateAttributeFontSize 16
+skinparam ArrowFontSize 18
+[*] -> Title
+
+state Title {
+  Title: Connect to server
+  Title: init P1
+  Title: Display title screen
+  Title -right-> Waiting: 1.5 seconds
+}
+
+state Waiting   {
+    Waiting: waiting for other player
+    Waiting -right-> Ready: init P2
+}
+
+state Ready {
+    Ready: display P1 or P2
+    Ready: init player locations
+    Ready --> Play: 1.5 seconds
+}
+
+state Play  {
+    Play -left-> Game_over: Player health == 0
+    Play -left-> Waiting: P2 disconnected
+    Receive_data: update player attributes
+    [*] -> Receive_data
+    Events: check for player input
+    Receive_data --> Events
+    Events --> End: quit
+    Events --> Move: arrow key
+    Move: update player position
+    Move --> Send_data
+    Events --> Shoot: s key
+    Shoot: update sprite, add arrow
+    Shoot --> Send_data
+    Send_data --> Events
+    Send_data: relay data to server
+    Events -r-> Draw
+    Draw: draw sprites on screen
+    Draw --> Receive_data
+
+}
+
+state Game_over {
+    Game_over: Display won/lost
+    Game_over: Play again? [Y/N]
+    Game_over -up-> Waiting: restart
+    Game_over -down-> End: quit
+}
+
+state End   {
+    End: close window, end game
+}
+
+@enduml

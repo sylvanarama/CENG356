@@ -281,6 +281,7 @@ class ForestFoes(object):
             # P1 Perspective
             if self.is_p1:
                 player = self.p1
+
                 # Background
                 screen.blit(background, [0, 0], [player.bg_page*X_DIM, 0, X_DIM, Y_DIM])
 
@@ -304,6 +305,7 @@ class ForestFoes(object):
             # P2 Perspective
             else:
                 player = self.p2
+
                 # Background
                 screen.blit(background, [0, 0], [player.bg_page * X_DIM, 0, X_DIM, Y_DIM])
 
